@@ -6,10 +6,10 @@ function createMasterSheet() {
 // You can run this function if you need to clear all the tutor tab you've made
 function reset() {
   var ss = SpreadsheetApp.getActive();
-  ss.getSheetByName('Instructions').activate();
+  ss.getSheetByName('Set Up Instructions').activate();
   var sheets = SpreadsheetApp.getActive().getSheets();
 
-  for (var i = sheets.length - 1; i > 1; i--) {
+  for (var i = sheets.length - 1; i > 2; i--) {
     ss.setActiveSheet(sheets[i]);
     ss.deleteActiveSheet();
   }
@@ -17,7 +17,7 @@ function reset() {
 
 // Use this to create tabs with all our tutors' names from the list that should be in the 'Tutors' tab.
 function createNamedLocalSheets() {
-  var queryString = "=QUERY(\'All data\'!A3:K1000, \"select * where Col1 contains \'";
+  var queryString = "=QUERY(\'All data\'!A2:K1000, \"select * where Col1 contains \'";
   var ss = SpreadsheetApp.getActive();
   ss.getSheetByName('Tutors').activate();
   var range = SpreadsheetApp.getActive().getRangeByName("Tutors");
@@ -25,7 +25,7 @@ function createNamedLocalSheets() {
   ss.insertSheet('All data');
 
   for (row in names) {
-    ss.getSheetByName('Tutors').activate();
+    ss.getSheetByName('All data').activate();
     ss.insertSheet(names[row][0]);
     var activeSheet = SpreadsheetApp.getActiveSheet();
     activeSheet.getRange('A1').setValue("Tutor");
@@ -45,24 +45,37 @@ function createNamedLocalSheets() {
   }
 }
 
-function exportRangeToPDF() { 
+function checkAddresses() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheets = ss.getSheets();
-  //var folder = DriveApp.getFileById(ss.getId()).getParents().next();
-  //var newFolder = folder.createFolder('Sheets for tutors');
   var range = ss.getRangeByName("Addresses");
   var addresses = range.getValues();
 
-  for (var i = 2; i < sheets.length; i++) {
+  for (var i = 4; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    var sheetName = sheet.getName();
+    var address = addresses[range.getLastRow() - (i - 3)];
+
+    console.log("Sending " + sheetName + " to " + address);
+  }
+}
+
+function generateAndSend() { 
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var folder = DriveApp.getFileById(ss.getId()).getParents().next();
+  var newFolder = folder.createFolder('Sheets for tutors ' + getDate());
+  var range = ss.getRangeByName("Addresses");
+  var addresses = range.getValues();
+
+  for (var i = 4; i < sheets.length; i++) {
     var sheet = sheets[i];
     var sheetName = sheet.getName();
     var pdfBlob = createPDF(ss, sheet);
-    //newFolder.createFile(pdfBlob).setName(sheetName + '.pdf');
-    //console.log(range.getLastRow());
-    var address = addresses[range.getLastRow() - (i - 1)][0];
-    console.log("Address: " + address);
-    console.log("PDF Name: " + pdfBlob.getName());
-    //sendPdf(pdfBlob, "kstadler@ucsd.edu");
+    newFolder.createFile(pdfBlob).setName(sheetName + '.pdf');
+    var address = addresses[range.getLastRow() - (i - 3)].toString();
+    //var address = "kstadler@ucsd.edu";
+    sendPdf(pdfBlob, address);
   }
 }
 
@@ -93,7 +106,7 @@ function createPDF(ss, sheet) {
   var token = ScriptApp.getOAuthToken();
   var response = UrlFetchApp.fetch(url + 'export?' + queryString, {
     headers: {
-      'Autorization': 'Bearer' + token,
+      'Authorization': 'Bearer' + token,
     },
   });
 
@@ -104,8 +117,16 @@ function sendPdf(pdfBlob, address) {
   var message = {
     to: address,
     subject: "Student Survey Responses for the CT Center",
-    body: "Hello!,\n\nBelow, find your survey responses updated as of this week! Note that the first row shows the prompts, responses follow below. As always, let us know if you have any questions and we will get back to you asap.\n\nThank you,\nKaty Stadler, CT Ops Assistant",
-    attachments: [pdfBlob]
+    body: "Hello!\n\nBelow, find your survey responses updated as of this week! Note that the first row shows the prompts, responses follow below. As always, let us know if you have any questions and we will get back to you asap. Please note: we are trying out a new method of distributing survey results, so if there are any mistakes or inconsistencies in what you receive please let us know. If your sheet shows #NA, that means you have no responses yet; continue encouraging your students to submit! \n\nThank you,\nKaty Stadler, CT Ops Assistant",
+    attachments: [pdfBlob],
+    bcc: "tlc-contenttutoring@ucsd.edu"
   }
   MailApp.sendEmail(message);
+}
+
+function getDate() {
+  var today = new Date();
+  today.setDate(today.getDate());
+  today = Utilities.formatDate(today, 'GMT+08:00', "MM.dd.yyyy' 'HH:mm");
+  return today.toString();
 }
